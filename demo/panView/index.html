@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+    <script type="text/javascript" src="jquery-2.1.0.min.js"></script>
+    <link rel="stylesheet" href="css/foundation.min.css">
+    <style>
+        .bar {
+            fill: orange;
+        }
+        .bar:hover {
+            fill: orangered ;
+        }
+        .d3-tip {
+            line-height: 1;
+            font-weight: bold;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            border-radius: 2px;
+        }
+
+        /* Creates a small triangle extender for the tooltip */
+        .d3-tip:after {
+            box-sizing: border-box;
+            display: inline;
+            font-size: 10px;
+            width: 100%;
+            line-height: 1;
+            color: rgba(0, 0, 0, 0.8);
+            content: "\25BC";
+            position: absolute;
+            text-align: center;
+        }
+
+        /* Style northward tooltips differently */
+        .d3-tip.n:after {
+            margin: -1px 0 0 0;
+            top: 100%;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="row">
+        <div class = "small-12 columns">
+            <h1 align=center>DirectFlow Assist Demo</h1>
+        </div>
+    </div>
+    <div class="row">
+        <div class = "small-1 columns">
+        </div>
+        <div class = "small-9 columns">
+            <button id="pause">Pause</button>
+            <button id="resume">Resume</button>
+            <button id="delete">Delete</button>
+        </div>
+    </div>
+
+</div>
+    <div class = "row">
+        <script>
+            $(document).ready(function() {
+                $("#pause" )
+                .click(function( event ) {
+                    $.get("http://172.22.28.143:8090/dfa/pause");
+                    console.log("pause")
+                });
+                $("#resume" )
+                .click(function( event ) {
+                    $.get("http://172.22.28.143:8090/dfa/resume");
+                    console.log("resume")
+                });
+                $("#delete" )
+                .click(function( event ) {
+                    $.get("http://172.22.28.143:8090/dfa/delete");
+                    console.log("delete")
+                    // Reset Graphic
+                });
+            });
+        </script>
+        <script src="./d3.min.js"></script>
+        <script>
+            var width = 800;
+            var gap = 5;
+            var left_width = 100;
+            var barHeight = 20;
+            var names = [];
+            var rates = []; 
+            var totalBarHeight = (barHeight + gap * 2) * 4;
+            var maxRate = 100;
+
+            var svg = d3.select("body").append("svg")
+            .attr("width", width + left_width)
+            .attr("height", totalBarHeight + 40)
+            .append("g")
+            .attr("transform", "translate(10, 20)");
+            $.getJSON('http://172.22.28.143:8090/something?callback=?', receivedData);
+            $.getJSON('http://172.22.28.143:8090/show/directflow/flows?callback=?', receivedFlows);
+            doPoll();
+
+
+            /*
+                Internal Functions
+            */
+
+            function receivedData(data, stat) {
+                console.log("received data");
+                var i = 0;
+                data.forEach(function(intf) {
+                    names.push(intf.name);
+                    rates.push(intf.stats.inPktsRate + i);
+                    i = i + .000001;
+                });
+                graph(data);
+            }
+            function receivedData2(data, stat) {
+                var rates = []
+                data.forEach(function(intf) {
+                    rates.push(intf.stats.inPktsRate + intf.stats.outPktsRate);
+                });
+                console.log(rates);
+                redraw(rates);
+            }
+
+            function receivedFlows(data, stat) {
+                removeFlows();
+                showFlows(data);
+            }
+
+            function doPoll() {
+                $.getJSON('http://172.22.28.143:8090/something?callback=?', receivedData2);
+                $.getJSON('http://172.22.28.143:8090/show/directflow/flows?callback=?', receivedFlows);
+                setTimeout(doPoll, 4000);
+            }
+
+
+            function redraw(rates) {
+                var x = d3.scale.linear()
+                .domain([0, maxRate])
+                .range([0, width]);
+
+                svg.selectAll("rect")
+                .data(rates)
+                .transition()
+                .attr("width", function(d) {
+                    return x(d) })
+
+            }
+
+            function showFlows(flows) {
+                flows.forEach(function(flow) {
+                    var $match;
+                    var $action = "<b>outIntf:</b> " + flow.action.outInterfaces[0];
+
+                    if(flow.match.inInterfaces.length > 0) {
+                        //Static flow entries
+                        $match = "<b>inIntf: </b>" + flow.match.inInterfaces[0];
+                    }
+                    if(flow.match.ipDst != null) {
+                        //Matching on IP
+                        $match = "<b>ipDst:</b> " + flow.match.ipDst.ip + "<br/> <b>ipSrc:</b> " + flow.match.ipSrc.ip;
+                        if(flow.action.outputDrop) {
+                            //Drop Rule - Firewall demo
+                            $action = "<b>DROP</b>";
+                            // Insert drop graphic here
+                        }
+                        else {
+                            // Bypass rule
+                            // Insert BYPASS graphic here
+                        }
+
+                    }
+                    $("#flows").append("<tr class=\"flowRow\"><td>" + flow.name + "</td><td>" + $match + 
+                            "</td><td>" + $action + "</td></tr>");
+                });
+            }
+
+            function removeFlows() {
+                $("tr").remove(".flowRow");
+            }
+
+            function graph(data)
+            {
+                var x = d3.scale.linear()
+                .domain([0, maxRate])
+                .range([0, width]);
+
+                var y = d3.scale.ordinal()
+                .domain(rates)
+                .rangeBands([0, totalBarHeight]);
+
+                svg.selectAll("rect")
+                .data(rates)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("x", left_width)
+                .attr("y", function(d,i){ 
+                    return y(d);
+                })
+                .attr("width", function(d) {
+                    return x(d); })
+                .attr("height", barHeight);
+
+                y = d3.scale.ordinal()
+                .domain(names)
+                .rangeBands([0, totalBarHeight]);
+
+                svg.selectAll("text.label")
+                .data(names)
+                .enter().append("text")
+                .attr("x", left_width / 2)
+                .attr("y", function(d, i){ 
+                    return y(d) + y.rangeBand()/2 - gap; } )
+                .attr("dy", ".36em")
+                .attr("text-anchor", "middle")
+                .attr('class', 'name')
+                .text(String);
+            }
+        </script>
+    </div>
+    <div class = "row">
+        <div class = "small-1 column">
+        </div>
+        <div class = "small-11 columns">
+            Use case 1: Data Center Backup elephant flows, insert DirectFlow BYPASS
+        </div>
+    </div>
+    <div class = "row">
+        <div class = "small-1 column">
+        </div>
+        <div class = "small-11 columns">
+            Use case 2: DoS Attack Mitigation, insert DirectFlow DROPs
+        </div>
+    </div>
+    </br>
+    </br>
+    <div class = "row">
+        <div class = "twelve columns">
+            <img src = "panDiagram.jpg" height = "300" />
+        </div>
+    </div>
+    <div class = "row">
+        <div class = "small-12 columns">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Flow Name</th>
+                            <th width="170">Match</th>
+                            <th width="170">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="flows">
+                    </tbody>
+                </table>
+        </div>
+    </div>
+    <br/>
+    <br/>
+    <div class="row">
+        <div class="two columns">
+            <img src = "arista_logo.jpg" style="height:44px; float: left;"/>
+            <img src = "panlogo.jpg" style="height:44px; float: right;"/>
+        </div>
+    </div>
+    <div class="row">
+        <br/>
+        <br/>
+    </div>
+</body>
+</html>

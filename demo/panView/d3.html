@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+    body {
+        margin-left:30px;
+        font-family: "Helvetica", Sans-serif;
+        width: 800px;
+    }
+    .bar {
+        fill: steelblue;
+    }
+
+    .bar:hover {
+        fill: brown;
+    }
+
+    .axis {
+        font: 10px sans-serif;
+    }
+
+    .axis path,
+    .axis line {
+        fill: none;
+        stroke: #000;
+        shape-rendering: crispEdges;
+    }
+
+    .x.axis path {
+        display: none;
+    }
+    .rate {
+          fill: white;
+      }
+
+    .right {
+        float:right;
+    }
+    .left {
+        float:left;
+    } 
+</style>
+<head>
+    <script type="text/javascript" src="jquery-2.1.0.min.js"></script>
+</head>
+<body>
+    <h1 align=center>Direct Flow Assist Demo</h1>
+    <hr>
+    <button id="pause">Pause</button>
+    <button id="resume">Resume</button>
+    <button id="delete">Delete</button>
+
+    <script>
+        $(document).ready(function() {
+            $("#pause" )
+            .click(function( event ) {
+                $.get("http://localhost:8080/dfa/pause");
+                console.log("pause")
+            });
+            $("#resume" )
+            .click(function( event ) {
+                $.get("http://localhost:8080/dfa/resume");
+                console.log("resume")
+            });
+            $("#delete" )
+            .click(function( event ) {
+                $.get("http://localhost:8080/dfa/delete");
+                console.log("delete")
+            });
+        });
+    </script>
+    <script src="./d3.min.js"></script>
+    <script>
+        var width = 800;
+        var gap = 5;
+        var left_width = 100;
+        var barHeight = 20;
+        var names = [];
+        var rates = []; 
+        var totalBarHeight = (barHeight + gap * 2) * 4;
+        var maxRate = 50;
+
+        var svg = d3.select("body").append("svg")
+        .attr("width", width + left_width)
+        .attr("height", totalBarHeight + 80)
+        .append("g")
+        .attr("transform", "translate(10, 20)");
+        $.getJSON('http://localhost:8080/something?callback=?', receivedData);
+        doPoll();
+        function receivedData(data, stat) {
+            var i = 0;
+            data.forEach(function(intf) {
+                names.push(intf.name);
+                rates.push(intf.stats.inPktsRate + i);
+                i = i + .000001;
+            });
+            foo(data);
+        }
+        function receivedData2(data, stat) {
+            var rates = []
+            data.forEach(function(intf) {
+                rates.push(intf.stats.inPktsRate + intf.stats.outPktsRate);
+            });
+            console.log(rates);
+            redraw(rates);
+        }
+        function doPoll() {
+            $.getJSON('http://localhost:8080/something?callback=?', receivedData2);
+            setTimeout(doPoll, 4000);
+        }
+
+
+        function redraw(rates) {
+
+            var x = d3.scale.linear()
+            .domain([0, maxRate])
+            .range([0, width]);
+
+            svg.selectAll("rect")
+            .data(rates)
+            .transition()
+            .attr("width", function(d) {
+                return x(d) })
+
+        }
+
+        function foo(data)
+        {
+
+
+            var x = d3.scale.linear()
+            .domain([0, maxRate])
+            .range([0, width]);
+
+            var y = d3.scale.ordinal()
+            .domain(rates)
+            .rangeBands([0, totalBarHeight]);
+
+            svg.selectAll("rect")
+            .data(rates)
+            .enter()
+            .append("rect")
+            .attr("class", "bar")
+            .attr("x", left_width)
+            .attr("y", function(d,i){ 
+                console.log(i);
+                console.log(y(d));
+                //return i * 20 + 20;
+                return y(d);
+                })
+            .attr("width", function(d) {
+                return x(d); })
+            .attr("height", barHeight);
+
+            y = d3.scale.ordinal()
+            .domain(names)
+            .rangeBands([0, totalBarHeight]);
+
+            svg.selectAll("text.label")
+            .data(names)
+            .enter().append("text")
+            .attr("x", left_width / 2)
+            .attr("y", function(d, i){ 
+                return y(d) + y.rangeBand()/2 - gap; } )
+            .attr("dy", ".36em")
+            .attr("text-anchor", "middle")
+            .attr('class', 'name')
+            .text(String);
+        }
+    </script>
+    <div>
+        <img src = "panDiagram.jpg" height = "300" />
+</div>
+<br/>
+<br/>
+    <div class=left>
+    <img src = "arista_logo.jpg" height = "42"/>
+</div>
+<div class=right>
+    <img src = "panlogo.jpg" height = "42"/>
+</div>
+</body>
+</html>
